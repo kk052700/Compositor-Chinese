@@ -14,7 +14,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
     steps:
       - name: Download repository files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Extract source and check translations
         run: |
@@ -38,6 +38,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/CompositorBuild" \
             -onlyUsePackageVersionsFromResolvedFile \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            STRING_CATALOG_GENERATE_SYMBOLS=NO \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             ENABLE_HARDENED_RUNTIME=NO \
             2>&1 | tee "$RUNNER_TEMP/Compositor-build.log"
@@ -54,7 +55,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$app" dist/Compositor-zh-Hans-arm64.zip
 
       - name: Upload app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Compositor-Chinese-AppleSilicon
           path: dist/Compositor-zh-Hans-arm64.zip
@@ -63,7 +64,7 @@ jobs:
 
       - name: Upload build log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-log
           path: ${{ runner.temp }}/Compositor-build.log
