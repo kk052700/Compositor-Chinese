@@ -1,0 +1,71 @@
+name: Build Chinese Compositor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Extract source and check translations
+        run: |
+          set -euo pipefail
+          ditto -x -k Compositor-source.zip source
+          python3 source/Compositor/scripts/check-localization.py
+          xcodebuild -version
+
+      - name: Build Apple Silicon app
+        working-directory: source/Compositor
+        run: |
+          set -euo pipefail
+          # Do not replace the translated personal build with an upstream English update.
+          /usr/libexec/PlistBuddy -c 'Add :SUEnableAutomaticChecks bool false' Config/Info.plist
+          /usr/libexec/PlistBuddy -c 'Add :SUAutomaticallyUpdate bool false' Config/Info.plist
+          xcodebuild build \
+            -project Compositor.xcodeproj \
+            -scheme Compositor \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/CompositorBuild" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            ENABLE_HARDENED_RUNTIME=NO \
+            2>&1 | tee "$RUNNER_TEMP/Compositor-build.log"
+
+      - name: Verify and package the app
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/CompositorBuild/Build/Products/Release/Compositor.app"
+          test -f "$app/Contents/Resources/zh-Hans.lproj/Localizable.strings"
+          test -f "$app/Contents/Resources/en.lproj/Localizable.strings"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          mkdir -p dist
+          # Zip with ditto before artifact upload to retain app permissions and framework symlinks.
+          ditto -c -k --sequesterRsrc --keepParent "$app" dist/Compositor-zh-Hans-arm64.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compositor-Chinese-AppleSilicon
+          path: dist/Compositor-zh-Hans-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ${{ runner.temp }}/Compositor-build.log
+          if-no-files-found: ignore
+          retention-days: 14
